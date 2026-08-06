@@ -3,16 +3,18 @@ import { ArrowLeft01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import Link from "next/link"
 
+import { PropMenu, type PropMenuProps } from "@/components/PropMenu"
 import { cn } from "@/lib/utils"
 
 type CurationShellProps = {
     title: string
     description?: string
     children: ReactNode
+    propMenu?: Omit<PropMenuProps, "title">
     className?: string
 }
 
-export function CurationShell({ title, description, children, className }: CurationShellProps) {
+export function CurationShell({ title, description, children, propMenu, className }: CurationShellProps) {
     return (
         <>
             <Link
@@ -22,6 +24,8 @@ export function CurationShell({ title, description, children, className }: Curat
             >
                 <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} className="size-4" />
             </Link>
+
+            {propMenu ? <PropMenu title={`${title} props`} {...propMenu} /> : null}
 
             <div className={cn("pt-16 pb-10 sm:py-14", className)}>
                 <header className="mb-6 max-w-xl">

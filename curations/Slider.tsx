@@ -15,11 +15,11 @@ type SliderProps = {
     minLabel?: string
     maxLabel?: string
     centerLabel?: string
-    ariaLabel?: string
     valueLabelSuffix?: string
     centerLabelSuffix?: string
     variant?: "default" | "gradient"
     shape?: "default" | "cone-incline" | "cone-decline"
+    showMajorLines?: boolean
     animated?: boolean
     animationSpeed?: number
 }
@@ -40,11 +40,11 @@ export function Slider({
     minLabel,
     maxLabel,
     centerLabel,
-    ariaLabel,
     valueLabelSuffix,
     centerLabelSuffix,
     variant = "default",
     shape = "default",
+    showMajorLines = true,
     animated = true,
     animationSpeed = 240,
 }: SliderProps) {
@@ -60,10 +60,7 @@ export function Slider({
     const resolvedCenterLabel = centerLabel ?? `${formatValue(clampedValue, valueLabelSuffix)}${centerLabelSuffix ? ` ${centerLabelSuffix}` : ""}`
 
     useEffect(() => {
-        if (!animated) {
-            setAnimatedLine(activeLine)
-            return
-        }
+        if (!animated) return
 
         const interval = window.setInterval(() => {
             setAnimatedLine((currentLine) => {
@@ -107,7 +104,7 @@ export function Slider({
                 ref={trackRef}
                 role="slider"
                 tabIndex={0}
-                aria-label={ariaLabel}
+                aria-label="Slider"
                 aria-valuemin={min}
                 aria-valuemax={max}
                 aria-valuenow={clampedValue}
@@ -146,7 +143,8 @@ export function Slider({
                     const lineProgress = index / (lineCount - 1)
                     const coneProgress = shape === "cone-decline" ? 1 - lineProgress : lineProgress
                     const baseHeight = shape === "default" ? 24 : 8 + coneProgress * 28
-                    const lineHeight = majorLines.has(index) ? (shape === "default" ? 32 : Math.min(baseHeight + 4, 40)) : baseHeight
+                    const isMajorLine = showMajorLines && majorLines.has(index)
+                    const lineHeight = isMajorLine ? (shape === "default" ? 32 : Math.min(baseHeight + 4, 40)) : baseHeight
 
                     return (
                         <span
@@ -161,6 +159,8 @@ export function Slider({
                             )}
                             style={{
                                 height: `${lineHeight}px`,
+                                transitionDuration: animated ? undefined : "0ms",
+                                transitionProperty: animated ? undefined : "none",
                                 ...(variant === "gradient" && index <= visibleActiveLine
                                     ? {
                                           backgroundImage: "linear-gradient(to right, #ff6b6b, #ffb86b, #72f896)",

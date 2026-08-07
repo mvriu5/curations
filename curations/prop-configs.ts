@@ -4,6 +4,7 @@ export type SliderShowcaseProps = {
     min: number
     max: number
     step: number
+    name?: string
     disabled: boolean
     size: "sm" | "md" | "lg"
     lines: number
@@ -21,6 +22,7 @@ export const curationPropConfigs = {
             min: 10_000,
             max: 1_000_000,
             step: 10_000,
+            name: undefined,
             disabled: false,
             size: "md",
             lines: 48,
@@ -35,6 +37,7 @@ export const curationPropConfigs = {
             { key: "min", label: "Minimum", type: "number" },
             { key: "max", label: "Maximum", type: "number" },
             { key: "step", label: "Step", type: "number", min: 1 },
+            { key: "name", label: "Form name", type: "text", placeholder: "Optional" },
             { key: "disabled", label: "Disabled", type: "switch" },
             {
                 key: "size",
@@ -74,6 +77,7 @@ export const curationPropConfigs = {
                 label: "Animation speed",
                 type: "number",
                 min: 1,
+                max: 1200,
                 step: 30,
             },
         ] satisfies PropMenuField[],

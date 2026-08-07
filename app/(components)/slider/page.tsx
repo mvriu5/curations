@@ -27,7 +27,7 @@ export default function SliderPage() {
 
             <section>
                 <div className="w-full rounded-2xl border bg-stone-100 p-6">
-                    <Slider value={value} onChange={setValue} {...sliderProps} />
+                    <Slider value={value} onChangeAction={setValue} {...sliderProps} />
                 </div>
             </section>
         </>

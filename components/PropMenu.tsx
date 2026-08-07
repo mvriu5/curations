@@ -1,10 +1,11 @@
 "use client"
 
-import { useId, useState } from "react"
+import { type ReactNode, useEffect, useId, useRef, useState } from "react"
 import { SlidersHorizontalIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { Button } from "@/components/ui/button"
+import { ColorInput } from "@/components/ColorInput"
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -56,6 +57,47 @@ export type PropMenuProps = {
 
 type PropFieldsProps = Pick<PropMenuProps, "fields" | "values" | "onValueChangeAction"> & {
     idPrefix: string
+}
+
+function FadedScrollArea({ children }: { children: ReactNode }) {
+    const scrollAreaRef = useRef<HTMLDivElement>(null)
+    const [showBottomFade, setShowBottomFade] = useState(false)
+
+    useEffect(() => {
+        const viewport = scrollAreaRef.current?.querySelector<HTMLElement>("[data-slot='scroll-area-viewport']")
+        if (!viewport) return
+
+        const updateFade = () => {
+            const remainingScroll = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop
+            setShowBottomFade(remainingScroll > 1)
+        }
+
+        const resizeObserver = new ResizeObserver(updateFade)
+        resizeObserver.observe(viewport)
+        if (viewport.firstElementChild) resizeObserver.observe(viewport.firstElementChild)
+        viewport.addEventListener("scroll", updateFade, { passive: true })
+        updateFade()
+
+        return () => {
+            resizeObserver.disconnect()
+            viewport.removeEventListener("scroll", updateFade)
+        }
+    }, [])
+
+    return (
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+            <ScrollArea ref={scrollAreaRef} className="size-full">
+                {children}
+            </ScrollArea>
+            <div
+                aria-hidden="true"
+                className={cn(
+                    "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-32 bg-stone-100 backdrop-blur-sm transition-opacity duration-200 [-webkit-mask-image:linear-gradient(to_top,black_0%,transparent_100%)] [mask-image:linear-gradient(to_top,black_0%,transparent_100%)]",
+                    showBottomFade ? "opacity-100" : "opacity-0"
+                )}
+            />
+        </div>
+    )
 }
 
 function PropFields({ fields, values, onValueChangeAction, idPrefix }: PropFieldsProps) {
@@ -113,13 +155,12 @@ function PropFields({ fields, values, onValueChangeAction, idPrefix }: PropField
                     return (
                         <div key={field.key} className="grid gap-2">
                             <Label htmlFor={controlId}>{field.label}</Label>
-                            <Input
+                            <ColorInput
                                 id={controlId}
-                                type="color"
-                                className="p-1"
+                                label={field.label}
                                 value={typeof value === "string" ? value : "#000000"}
                                 disabled={disabled}
-                                onChange={(event) => onValueChangeAction(field.key, event.target.value)}
+                                onValueChangeAction={(nextValue) => onValueChangeAction(field.key, nextValue)}
                             />
                         </div>
                     )
@@ -136,7 +177,10 @@ function PropFields({ fields, values, onValueChangeAction, idPrefix }: PropField
                             max={field.max}
                             step={field.step}
                             disabled={disabled}
-                            onChange={(event) => onValueChangeAction(field.key, Number(event.target.value))}
+                            onChange={(event) => {
+                                const nextValue = event.currentTarget.valueAsNumber
+                                if (Number.isFinite(nextValue)) onValueChangeAction(field.key, nextValue)
+                            }}
                         />
                     </div>
                 )
@@ -184,9 +228,9 @@ export function PropMenu({ fields, values, onValueChangeAction, title = "Props",
                     desktopOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1rem)]"
                 )}
             >
-                <ScrollArea className="min-h-0 flex-1">
+                <FadedScrollArea>
                     <PropFields idPrefix={`${panelId}-desktop`} fields={fields} values={values} onValueChangeAction={onValueChangeAction} />
-                </ScrollArea>
+                </FadedScrollArea>
             </aside>
 
             {isMobile ? (
@@ -196,9 +240,9 @@ export function PropMenu({ fields, values, onValueChangeAction, title = "Props",
                             <DrawerTitle>{title}</DrawerTitle>
                             <DrawerDescription>{description}</DrawerDescription>
                         </DrawerHeader>
-                        <ScrollArea className="min-h-0 flex-1">
+                        <FadedScrollArea>
                             <PropFields idPrefix={`${panelId}-mobile`} fields={fields} values={values} onValueChangeAction={onValueChangeAction} />
-                        </ScrollArea>
+                        </FadedScrollArea>
                     </DrawerContent>
                 </Drawer>
             ) : null}

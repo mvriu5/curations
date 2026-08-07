@@ -4,15 +4,24 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { cn } from "@/lib/utils"
 
+type SliderSize = "sm" | "md" | "lg"
+
+const SLIDER_SIZE_STYLES = {
+    sm: { track: "h-12", label: "text-[0.6875rem]", baseHeight: 18, coneMinHeight: 6, coneHeightRange: 20, majorHeight: 24, coneMajorMax: 30 },
+    md: { track: "h-16", label: "text-xs", baseHeight: 24, coneMinHeight: 8, coneHeightRange: 28, majorHeight: 32, coneMajorMax: 40 },
+    lg: { track: "h-20", label: "text-sm", baseHeight: 30, coneMinHeight: 10, coneHeightRange: 36, majorHeight: 40, coneMajorMax: 50 },
+} satisfies Record<SliderSize, Record<string, string | number>>
+
 type SliderProps = {
     min: number
     max: number
     step?: number
     value: number
-    onChange: (value: number) => void
+    onChangeAction: (value: number) => void
     onValueCommitAction?: (value: number) => void
+    name?: string
     disabled?: boolean
-    size?: "sm" | "md" | "lg"
+    size?: SliderSize
     className?: string
     lines?: number
     minLabel?: string
@@ -30,13 +39,20 @@ function formatValue(value: number) {
     return new Intl.NumberFormat("en-US", { notation: "compact" }).format(value)
 }
 
+function getDecimalPlaces(value: number) {
+    const [coefficient, exponent = "0"] = String(value).toLowerCase().split("e")
+    const decimals = coefficient.split(".")[1]?.length ?? 0
+    return Math.max(0, decimals - Number(exponent))
+}
+
 export function Slider({
     min,
     max,
     step = 1,
     value,
-    onChange,
+    onChangeAction: onChange,
     onValueCommitAction,
+    name,
     disabled = false,
     size = "md",
     className,
@@ -52,77 +68,142 @@ export function Slider({
     animationSpeed = 240,
 }: SliderProps) {
     const trackRef = useRef<HTMLDivElement>(null)
-    const committedValueRef = useRef(value)
-    const lineCount = Math.max(2, lines)
-    const range = max - min
-    const clampedValue = Math.min(max, Math.max(min, value))
-    const progress = range > 0 ? (clampedValue - min) / range : 0
-    const activeLine = Math.round(progress * (lineCount - 1))
-    const [animatedLine, setAnimatedLine] = useState(activeLine)
+    const pointerStartXRef = useRef(0)
+    const didDragRef = useRef(false)
+    const commitStartValueRef = useRef(value)
+    const pendingValueRef = useRef(value)
+
+    const resolvedMin = Number.isFinite(min) ? min : 0
+    const resolvedStep = Number.isFinite(step) && step > 0 ? step : 1
+    const resolvedMax = Number.isFinite(max) && max > resolvedMin ? max : resolvedMin + resolvedStep
+    const resolvedValue = Number.isFinite(value) ? value : resolvedMin
+    const clampedValue = Math.min(resolvedMax, Math.max(resolvedMin, resolvedValue))
+    const lineCount = Math.min(512, Math.max(2, Math.floor(Number.isFinite(lines) ? lines : 48)))
+    const resolvedAnimationSpeed = Math.min(2_000, Number.isFinite(animationSpeed) && animationSpeed > 0 ? animationSpeed : 240)
+    const range = resolvedMax - resolvedMin
+    const progress = (clampedValue - resolvedMin) / range
+    const activePosition = progress * (lineCount - 1)
+    const animatedPositionRef = useRef(activePosition)
+    const springVelocityRef = useRef(0)
+    const [animatedPosition, setAnimatedPosition] = useState(activePosition)
     const [isDragging, setIsDragging] = useState(false)
-    const shouldAnimate = !isDragging
-    const visibleActiveLine = shouldAnimate ? Math.round(animatedLine) : activeLine
-    const sizeStyles = {
-        sm: { track: "h-12", label: "text-[0.6875rem]", baseHeight: 18, coneMinHeight: 6, coneHeightRange: 20, majorHeight: 24, coneMajorMax: 30 },
-        md: { track: "h-16", label: "text-xs", baseHeight: 24, coneMinHeight: 8, coneHeightRange: 28, majorHeight: 32, coneMajorMax: 40 },
-        lg: { track: "h-20", label: "text-sm", baseHeight: 30, coneMinHeight: 10, coneHeightRange: 36, majorHeight: 40, coneMajorMax: 50 },
-    }[size]
+    const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+    const shouldAnimate = !isDragging && !prefersReducedMotion
+    const visiblePosition = shouldAnimate ? animatedPosition : activePosition
+    const sizeStyles = SLIDER_SIZE_STYLES[size] ?? SLIDER_SIZE_STYLES.md
     const majorLines = new Set([0, Math.round((lineCount - 1) / 4), Math.round((lineCount - 1) / 2), Math.round(((lineCount - 1) * 3) / 4), lineCount - 1])
     const resolvedCenterLabel = centerLabel ?? formatValue(clampedValue)
 
+    pendingValueRef.current = clampedValue
+
+    const getPositionForValue = useCallback((nextValue: number) => ((nextValue - resolvedMin) / range) * (lineCount - 1), [lineCount, range, resolvedMin])
+
+    const syncAnimatedPosition = useCallback(
+        (nextValue: number) => {
+            const nextPosition = getPositionForValue(nextValue)
+            animatedPositionRef.current = nextPosition
+            springVelocityRef.current = 0
+            setAnimatedPosition(nextPosition)
+        },
+        [getPositionForValue]
+    )
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
+        const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches)
+
+        updatePreference()
+        mediaQuery.addEventListener("change", updatePreference)
+        return () => mediaQuery.removeEventListener("change", updatePreference)
+    }, [])
+
     useEffect(() => {
         if (!shouldAnimate) {
-            setAnimatedLine(activeLine)
+            springVelocityRef.current = 0
+            if (animatedPositionRef.current !== activePosition) {
+                animatedPositionRef.current = activePosition
+                setAnimatedPosition(activePosition)
+            }
             return
         }
 
-        const interval = window.setInterval(() => {
-            setAnimatedLine((currentLine) => {
-                const distance = activeLine - currentLine
-                const linesPerFrame = Math.max(animationSpeed, 1) / 60
+        if (Math.abs(animatedPositionRef.current - activePosition) < 0.001 && Math.abs(springVelocityRef.current) < 0.01) return
 
-                if (Math.abs(distance) <= linesPerFrame) {
-                    window.clearInterval(interval)
-                    return activeLine
-                }
+        let animationFrame = 0
+        let previousTime = performance.now()
+        const stiffness = resolvedAnimationSpeed
+        const damping = 2 * Math.sqrt(stiffness) * 0.82
 
-                return currentLine + Math.sign(distance) * linesPerFrame
-            })
-        }, 16)
+        const animate = (currentTime: number) => {
+            const elapsedSeconds = Math.min(currentTime - previousTime, 32) / 1000
+            previousTime = currentTime
+            const substeps = Math.max(1, Math.ceil(elapsedSeconds / 0.008))
+            const stepTime = elapsedSeconds / substeps
+            let nextPosition = animatedPositionRef.current
+            let velocity = springVelocityRef.current
 
-        return () => window.clearInterval(interval)
-    }, [activeLine, animationSpeed, shouldAnimate])
+            for (let stepIndex = 0; stepIndex < substeps; stepIndex += 1) {
+                const acceleration = stiffness * (activePosition - nextPosition) - damping * velocity
+                velocity += acceleration * stepTime
+                nextPosition += velocity * stepTime
+            }
+
+            const isSettled = Math.abs(activePosition - nextPosition) < 0.001 && Math.abs(velocity) < 0.01
+
+            if (isSettled) {
+                nextPosition = activePosition
+                velocity = 0
+            }
+
+            animatedPositionRef.current = nextPosition
+            springVelocityRef.current = velocity
+            setAnimatedPosition(nextPosition)
+
+            if (!isSettled) animationFrame = window.requestAnimationFrame(animate)
+        }
+
+        animationFrame = window.requestAnimationFrame(animate)
+        return () => window.cancelAnimationFrame(animationFrame)
+    }, [activePosition, resolvedAnimationSpeed, shouldAnimate])
 
     const updateValue = useCallback(
         (nextValue: number) => {
-            const steppedValue = Math.round((nextValue - min) / step) * step + min
-            const resolvedValue = Math.min(max, Math.max(min, steppedValue))
-            committedValueRef.current = resolvedValue
-            onChange(resolvedValue)
-            return resolvedValue
+            const steppedValue = Math.round((nextValue - resolvedMin) / resolvedStep) * resolvedStep + resolvedMin
+            const precision = Math.max(getDecimalPlaces(resolvedMin), getDecimalPlaces(resolvedStep))
+            const roundedValue = Number(steppedValue.toFixed(precision))
+            const nextResolvedValue = Math.min(resolvedMax, Math.max(resolvedMin, roundedValue))
+
+            if (nextResolvedValue === pendingValueRef.current) return nextResolvedValue
+
+            pendingValueRef.current = nextResolvedValue
+            onChange(nextResolvedValue)
+            return nextResolvedValue
         },
-        [max, min, onChange, step]
+        [onChange, resolvedMax, resolvedMin, resolvedStep]
     )
 
     const updateFromPointer = useCallback(
         (clientX: number) => {
             const track = trackRef.current
-            if (!track || range <= 0) return
+            if (!track) return
 
             const bounds = track.getBoundingClientRect()
-            updateValue(min + ((clientX - bounds.left) / bounds.width) * range)
+            if (bounds.width <= 0) return
+            updateValue(resolvedMin + ((clientX - bounds.left) / bounds.width) * range)
         },
-        [min, range, updateValue]
+        [range, resolvedMin, updateValue]
     )
 
     return (
         <div className={cn("w-full", className)}>
+            {name ? <input type="hidden" name={name} value={clampedValue} disabled={disabled} /> : null}
+
             <div
                 ref={trackRef}
                 role="slider"
                 aria-label="Slider"
-                aria-valuemin={min}
-                aria-valuemax={max}
+                aria-valuemin={resolvedMin}
+                aria-valuemax={resolvedMax}
                 aria-valuenow={clampedValue}
                 aria-valuetext={resolvedCenterLabel}
                 aria-disabled={disabled || undefined}
@@ -131,49 +212,64 @@ export function Slider({
                 onPointerDown={(event) => {
                     if (disabled) return
                     event.preventDefault()
-                    setIsDragging(false)
+                    pointerStartXRef.current = event.clientX
+                    didDragRef.current = false
+                    commitStartValueRef.current = clampedValue
+                    pendingValueRef.current = clampedValue
                     event.currentTarget.setPointerCapture(event.pointerId)
                     updateFromPointer(event.clientX)
                 }}
                 onPointerMove={(event) => {
-                    if (disabled) return
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                        setIsDragging(true)
-                        updateFromPointer(event.clientX)
-                    }
+                    if (disabled || !event.currentTarget.hasPointerCapture(event.pointerId)) return
+
+                    if (!didDragRef.current && Math.abs(event.clientX - pointerStartXRef.current) < 4) return
+
+                    didDragRef.current = true
+                    setIsDragging(true)
+                    updateFromPointer(event.clientX)
                 }}
                 onPointerUp={(event) => {
+                    if (disabled || !event.currentTarget.hasPointerCapture(event.pointerId)) return
+
+                    const committedValue = pendingValueRef.current
+                    if (didDragRef.current) syncAnimatedPosition(committedValue)
                     setIsDragging(false)
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-                    onValueCommitAction?.(committedValueRef.current)
+                    event.currentTarget.releasePointerCapture(event.pointerId)
+                    if (committedValue !== commitStartValueRef.current) onValueCommitAction?.(committedValue)
                 }}
                 onPointerCancel={(event) => {
+                    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+
+                    syncAnimatedPosition(pendingValueRef.current)
                     setIsDragging(false)
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+                    event.currentTarget.releasePointerCapture(event.pointerId)
                 }}
                 onKeyDown={(event) => {
                     if (disabled) return
                     const keyValues: Record<string, number> = {
-                        ArrowLeft: clampedValue - step,
-                        ArrowDown: clampedValue - step,
-                        ArrowRight: clampedValue + step,
-                        ArrowUp: clampedValue + step,
-                        PageDown: clampedValue - step * 10,
-                        PageUp: clampedValue + step * 10,
-                        Home: min,
-                        End: max,
+                        ArrowLeft: clampedValue - resolvedStep,
+                        ArrowDown: clampedValue - resolvedStep,
+                        ArrowRight: clampedValue + resolvedStep,
+                        ArrowUp: clampedValue + resolvedStep,
+                        PageDown: clampedValue - resolvedStep * 10,
+                        PageUp: clampedValue + resolvedStep * 10,
+                        Home: resolvedMin,
+                        End: resolvedMax,
                     }
 
                     if (keyValues[event.key] !== undefined) {
                         event.preventDefault()
-                        onValueCommitAction?.(updateValue(keyValues[event.key]))
+                        const nextValue = updateValue(keyValues[event.key])
+                        if (nextValue !== clampedValue) onValueCommitAction?.(nextValue)
                     }
                 }}
                 onDragStart={(event) => event.preventDefault()}
             >
                 {Array.from({ length: lineCount }, (_, index) => {
-                    const distanceFromValue = Math.abs(index - visibleActiveLine)
-                    const scale = distanceFromValue === 0 ? "scale-y-150" : distanceFromValue === 1 ? "scale-y-125" : distanceFromValue === 2 ? "scale-y-110" : "scale-y-100"
+                    const distanceFromValue = Math.abs(index - visiblePosition)
+                    const waveStrength = Math.exp(-(distanceFromValue ** 2) / (2 * 1.15 ** 2))
+                    const scale = 1 + waveStrength * 0.5
+                    const activation = Math.min(1, Math.max(0, visiblePosition - index + 1))
                     const lineProgress = index / (lineCount - 1)
                     const coneProgress = shape === "cone-decline" ? 1 - lineProgress : lineProgress
                     const baseHeight = shape === "default" ? sizeStyles.baseHeight : sizeStyles.coneMinHeight + coneProgress * sizeStyles.coneHeightRange
@@ -184,34 +280,40 @@ export function Slider({
                         <span
                             key={index}
                             aria-hidden="true"
-                            className={cn(
-                                "origin-center flex-1 rounded-full",
-                                shouldAnimate && "transition-[background-color,height,opacity,transform] duration-100 ease-out motion-reduce:transition-none",
-                                scale,
-                                index > visibleActiveLine ? "opacity-40" : "opacity-100"
-                            )}
+                            className="relative flex-1 origin-center overflow-hidden rounded-full bg-current transition-[opacity,transform] duration-75 ease-out motion-reduce:transition-none"
                             style={{
                                 height: `${lineHeight}px`,
-                                backgroundColor: index > visibleActiveLine ? inactiveColor : variant === "default" ? activeColor : undefined,
+                                color: inactiveColor,
+                                opacity: 0.4 + activation * 0.6,
+                                transform: `scaleY(${scale})`,
                                 transitionDuration: shouldAnimate ? undefined : "0ms",
                                 transitionProperty: shouldAnimate ? undefined : "none",
-                                ...(variant === "gradient" && index <= visibleActiveLine
-                                    ? {
-                                          backgroundImage: "linear-gradient(to right, #ff6b6b, #ffb86b, #72f896)",
-                                          backgroundPosition: `${(index / (lineCount - 1)) * 100}% center`,
-                                          backgroundSize: `${lineCount * 100}% 100%`,
-                                      }
-                                    : {}),
                             }}
-                        />
+                        >
+                            <span
+                                className="absolute inset-0 rounded-[inherit] transition-opacity duration-75 ease-out motion-reduce:transition-none"
+                                style={{
+                                    opacity: activation,
+                                    transitionDuration: shouldAnimate ? undefined : "0ms",
+                                    backgroundColor: variant === "default" ? activeColor : undefined,
+                                    ...(variant === "gradient"
+                                        ? {
+                                              backgroundImage: "linear-gradient(to right, #ff6b6b, #ffb86b, #72f896)",
+                                              backgroundPosition: `${lineProgress * 100}% center`,
+                                              backgroundSize: `${lineCount * 100}% 100%`,
+                                          }
+                                        : {}),
+                                }}
+                            />
+                        </span>
                     )
                 })}
             </div>
 
             <div className={cn("mt-2 grid grid-cols-3 text-muted-foreground", sizeStyles.label)}>
-                <span>{minLabel ?? formatValue(min)}</span>
+                <span>{minLabel ?? formatValue(resolvedMin)}</span>
                 <span className="text-center tabular-nums text-foreground">{resolvedCenterLabel}</span>
-                <span className="text-right">{maxLabel ?? formatValue(max)}</span>
+                <span className="text-right">{maxLabel ?? formatValue(resolvedMax)}</span>
             </div>
         </div>
     )

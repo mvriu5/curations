@@ -1,20 +1,34 @@
 import type { ReactNode } from "react"
+import { readFile } from "node:fs/promises"
+import { basename, isAbsolute, relative, resolve } from "node:path"
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import Link from "next/link"
+import type { BundledLanguage } from "shiki"
 
-import { PropMenu, type PropMenuProps } from "@/components/PropMenu"
+import { CodeBlock } from "@/components/CodeBlock"
 import { cn } from "@/lib/utils"
 
 type CurationShellProps = {
     title: string
     description?: string
+    componentFile: string
+    codeLanguage?: BundledLanguage
     children: ReactNode
-    propMenu?: Omit<PropMenuProps, "title">
     className?: string
 }
 
-export function CurationShell({ title, description, children, propMenu, className }: CurationShellProps) {
+export async function CurationShell({ title, description, componentFile, codeLanguage = "tsx", children, className }: CurationShellProps) {
+    const curationsRoot = resolve(process.cwd(), "curations")
+    const resolvedComponentPath = resolve(curationsRoot, componentFile)
+    const relativeComponentPath = relative(curationsRoot, resolvedComponentPath)
+
+    if (relativeComponentPath.startsWith("..") || isAbsolute(relativeComponentPath)) {
+        throw new Error("Curation component path must stay within the project root.")
+    }
+
+    const sourceCode = await readFile(resolvedComponentPath, "utf8")
+
     return (
         <>
             <Link
@@ -25,8 +39,6 @@ export function CurationShell({ title, description, children, propMenu, classNam
                 <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} className="size-4" />
             </Link>
 
-            {propMenu ? <PropMenu title={`${title} props`} {...propMenu} /> : null}
-
             <div className={cn("pt-16 pb-10 sm:py-14", className)}>
                 <header className="mb-6 max-w-xl">
                     <h1 className="text-2xl font-medium tracking-tight">{title}</h1>
@@ -34,6 +46,8 @@ export function CurationShell({ title, description, children, propMenu, classNam
                 </header>
 
                 <main>{children}</main>
+
+                <CodeBlock code={sourceCode} language={codeLanguage} filename={basename(componentFile)} className="mt-10" />
             </div>
         </>
     )

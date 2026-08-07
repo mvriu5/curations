@@ -4,17 +4,15 @@ export type SliderShowcaseProps = {
     min: number
     max: number
     step: number
+    disabled: boolean
+    size: "sm" | "md" | "lg"
     lines: number
     variant: "default" | "gradient"
+    activeColor: string
+    inactiveColor: string
     shape: "default" | "cone-incline" | "cone-decline"
     showMajorLines: boolean
-    animated: boolean
     animationSpeed: number
-    minLabel?: string
-    maxLabel?: string
-    centerLabel?: string
-    valueLabelSuffix?: string
-    centerLabelSuffix?: string
 }
 
 export const curationPropConfigs = {
@@ -23,22 +21,31 @@ export const curationPropConfigs = {
             min: 10_000,
             max: 1_000_000,
             step: 10_000,
+            disabled: false,
+            size: "md",
             lines: 48,
             variant: "gradient",
+            activeColor: "#1c1917",
+            inactiveColor: "#d6d3d1",
             shape: "cone-incline",
             showMajorLines: true,
-            animated: true,
             animationSpeed: 240,
-            minLabel: undefined,
-            maxLabel: undefined,
-            centerLabel: undefined,
-            valueLabelSuffix: "people",
-            centerLabelSuffix: undefined,
         } as SliderShowcaseProps,
         fields: [
             { key: "min", label: "Minimum", type: "number" },
             { key: "max", label: "Maximum", type: "number" },
             { key: "step", label: "Step", type: "number", min: 1 },
+            { key: "disabled", label: "Disabled", type: "switch" },
+            {
+                key: "size",
+                label: "Size",
+                type: "select",
+                options: [
+                    { label: "Small", value: "sm" },
+                    { label: "Medium", value: "md" },
+                    { label: "Large", value: "lg" },
+                ],
+            },
             { key: "lines", label: "Lines", type: "number", min: 2, max: 96 },
             {
                 key: "variant",
@@ -49,6 +56,8 @@ export const curationPropConfigs = {
                     { label: "Gradient", value: "gradient" },
                 ],
             },
+            { key: "activeColor", label: "Active color", type: "color", disabledWhen: { key: "variant", value: "gradient" } },
+            { key: "inactiveColor", label: "Inactive color", type: "color" },
             {
                 key: "shape",
                 label: "Shape",
@@ -60,20 +69,13 @@ export const curationPropConfigs = {
                 ],
             },
             { key: "showMajorLines", label: "Major lines", type: "switch" },
-            { key: "animated", label: "Animated", type: "switch" },
             {
                 key: "animationSpeed",
                 label: "Animation speed",
                 type: "number",
                 min: 1,
                 step: 30,
-                disabledWhen: { key: "animated", value: false },
             },
-            { key: "minLabel", label: "Minimum label", type: "text", placeholder: "Auto" },
-            { key: "maxLabel", label: "Maximum label", type: "text", placeholder: "Auto" },
-            { key: "centerLabel", label: "Center label", type: "text", placeholder: "Auto" },
-            { key: "valueLabelSuffix", label: "Value suffix", type: "text" },
-            { key: "centerLabelSuffix", label: "Center suffix", type: "text" },
         ] satisfies PropMenuField[],
     },
 }

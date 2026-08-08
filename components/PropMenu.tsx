@@ -9,6 +9,7 @@ import { ColorInput } from "@/components/ColorInput"
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { NumberInput } from "@/components/NumberInput"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
@@ -236,18 +237,14 @@ function PropFields({ fields, values, onValueChangeAction, idPrefix }: PropField
                 return (
                     <div key={field.key} className="grid gap-2">
                         <Label htmlFor={controlId}>{field.label}</Label>
-                        <Input
+                        <NumberInput
                             id={controlId}
-                            type="number"
                             value={Number(value)}
                             min={field.min}
                             max={field.max}
                             step={field.step}
                             disabled={disabled}
-                            onChange={(event) => {
-                                const nextValue = event.currentTarget.valueAsNumber
-                                if (Number.isFinite(nextValue)) onValueChangeAction(field.key, nextValue)
-                            }}
+                            onValueChangeAction={(nextValue) => onValueChangeAction(field.key, nextValue)}
                         />
                     </div>
                 )

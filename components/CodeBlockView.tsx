@@ -34,9 +34,9 @@ export function CodeBlockView({ code, html, filename, maxHeight, className }: Co
 
     return (
         <figure className={cn("overflow-hidden rounded-2xl border bg-stone-100 text-zinc-950", className)}>
-            <figcaption className="flex min-h-11 items-center justify-between gap-3 border-b border-zinc-200 px-3 pl-4">
+            <figcaption className="flex min-h-11 items-center justify-between gap-3 border-b border-zinc-200 pr-2 pl-4">
                 <span className="truncate font-mono text-xs text-zinc-500">{filename ?? "Code"}</span>
-                <Button variant="ghost" size="sm" className="text-zinc-600 hover:bg-stone-300 hover:text-zinc-950" onClick={copyCode}>
+                <Button variant="ghost" size="sm" className="text-zinc-600 hover:bg-stone-200! py-1! px-1.5! rounded-xl! hover:text-zinc-950" onClick={copyCode}>
                     <HugeiconsIcon icon={copied ? Tick02Icon : Copy01Icon} strokeWidth={2} />
                 </Button>
             </figcaption>
@@ -44,7 +44,7 @@ export function CodeBlockView({ code, html, filename, maxHeight, className }: Co
             <div className="relative">
                 <ScrollArea scrollbars="both" className={cn("w-full bg-white", expanded && "h-auto")} style={expanded ? undefined : { height: maxHeight }}>
                     <div
-                        className="text-sm [&_.line]:min-h-lh [&_code]:font-mono [&_pre]:w-max [&_pre]:min-w-full [&_pre]:bg-stone-100! [&_pre]:p-4 [&_pre]:pb-16 [&_pre]:leading-6"
+                        className="text-sm [&_.line-number]:sticky [&_.line-number]:left-0 [&_.line-number]:inline-block [&_.line-number]:w-6 [&_.line-number]:border-r [&_.line-number]:border-zinc-200/70 [&_.line-number]:bg-stone-100 [&_.line-number]:pr-3 [&_.line-number]:text-right [&_.line-number]:text-zinc-400 [&_.line-number]:select-none [&_.line]:min-h-lh [&_code]:font-mono [&_pre]:w-max [&_pre]:min-w-full [&_pre]:bg-stone-100! [&_pre]:px-4 [&_pre]:pb-16 [&_pre]:leading-6"
                         dangerouslySetInnerHTML={{ __html: html }}
                     />
                 </ScrollArea>

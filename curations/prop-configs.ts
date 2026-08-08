@@ -13,6 +13,7 @@ export type SliderShowcaseProps = {
     inactiveColor: string
     shape: "default" | "cone-incline" | "cone-decline"
     showMajorLines: boolean
+    majorLines: number[]
     animationSpeed: number
 }
 
@@ -31,6 +32,7 @@ export const curationPropConfigs = {
             inactiveColor: "#d6d3d1",
             shape: "cone-incline",
             showMajorLines: true,
+            majorLines: [0, 12, 24, 35, 47],
             animationSpeed: 240,
         } as SliderShowcaseProps,
         fields: [
@@ -72,6 +74,13 @@ export const curationPropConfigs = {
                 ],
             },
             { key: "showMajorLines", label: "Major lines", type: "switch" },
+            {
+                key: "majorLines",
+                label: "Major line indexes",
+                type: "number-array",
+                placeholder: "0, 12, 24, 35, 47",
+                disabledWhen: { key: "showMajorLines", value: false },
+            },
             {
                 key: "animationSpeed",
                 label: "Animation speed",

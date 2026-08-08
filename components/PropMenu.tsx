@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 
-export type PropMenuValue = string | number | boolean | undefined
+export type PropMenuValue = string | number | boolean | number[] | undefined
 
 type PropMenuFieldBase = {
     key: string
@@ -38,6 +38,11 @@ export type PropMenuField =
           disabledWhen?: { key: string; value: PropMenuValue }
       })
     | (PropMenuFieldBase & {
+          type: "number-array"
+          placeholder?: string
+          disabledWhen?: { key: string; value: PropMenuValue }
+      })
+    | (PropMenuFieldBase & {
           type: "text"
           placeholder?: string
       })
@@ -57,6 +62,53 @@ export type PropMenuProps = {
 
 type PropFieldsProps = Pick<PropMenuProps, "fields" | "values" | "onValueChangeAction"> & {
     idPrefix: string
+}
+
+function NumberArrayInput({
+    id,
+    value,
+    disabled,
+    placeholder,
+    onValueChangeAction,
+}: {
+    id: string
+    value: PropMenuValue
+    disabled: boolean
+    placeholder?: string
+    onValueChangeAction: (value: number[]) => void
+}) {
+    const serializedValue = Array.isArray(value) ? value.join(", ") : ""
+    const [draftValue, setDraftValue] = useState(serializedValue)
+    const parsedValue = parseNumberArray(draftValue)
+
+    useEffect(() => setDraftValue(serializedValue), [serializedValue])
+
+    return (
+        <Input
+            id={id}
+            value={draftValue}
+            disabled={disabled}
+            placeholder={placeholder}
+            aria-invalid={parsedValue === null}
+            onChange={(event) => {
+                const nextValue = event.currentTarget.value
+                const nextParsedValue = parseNumberArray(nextValue)
+                setDraftValue(nextValue)
+                if (nextParsedValue) onValueChangeAction(nextParsedValue)
+            }}
+            onBlur={() => setDraftValue(parsedValue ? parsedValue.join(", ") : serializedValue)}
+        />
+    )
+}
+
+function parseNumberArray(value: string) {
+    if (!value.trim()) return []
+
+    const entries = value.split(",").map((entry) => entry.trim())
+    if (entries.some((entry) => !entry)) return null
+
+    const values = entries.map(Number)
+    return values.every(Number.isFinite) ? values : null
 }
 
 function FadedScrollArea({ children }: { children: ReactNode }) {
@@ -160,6 +212,21 @@ function PropFields({ fields, values, onValueChangeAction, idPrefix }: PropField
                                 label={field.label}
                                 value={typeof value === "string" ? value : "#000000"}
                                 disabled={disabled}
+                                onValueChangeAction={(nextValue) => onValueChangeAction(field.key, nextValue)}
+                            />
+                        </div>
+                    )
+                }
+
+                if (field.type === "number-array") {
+                    return (
+                        <div key={field.key} className="grid gap-2">
+                            <Label htmlFor={controlId}>{field.label}</Label>
+                            <NumberArrayInput
+                                id={controlId}
+                                value={value}
+                                disabled={disabled}
+                                placeholder={field.placeholder}
                                 onValueChangeAction={(nextValue) => onValueChangeAction(field.key, nextValue)}
                             />
                         </div>

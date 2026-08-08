@@ -41,7 +41,7 @@ export async function CurationShell({ title, description, componentFile, codeLan
 
             <div className={cn("pt-16 pb-10 sm:py-14", className)}>
                 <header className="mb-6 max-w-xl">
-                    <h1 className="text-2xl font-medium tracking-tight">{title}</h1>
+                    <h1 className="text-2xl font-medium tracking-tight font-heading">{title}</h1>
                     {description ? <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p> : null}
                 </header>
 

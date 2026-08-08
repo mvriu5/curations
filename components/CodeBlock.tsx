@@ -16,6 +16,18 @@ export async function CodeBlock({ code, language = "tsx", filename, maxHeight = 
     const html = await codeToHtml(code, {
         lang: language,
         theme: "github-light-default",
+        transformers: [
+            {
+                line(node, line) {
+                    node.children.unshift({
+                        type: "element",
+                        tagName: "span",
+                        properties: { className: ["line-number"], ariaHidden: "true" },
+                        children: [{ type: "text", value: String(line) }],
+                    })
+                },
+            },
+        ],
     })
 
     return <CodeBlockView code={code} html={html} filename={filename} maxHeight={maxHeight} className={className} />
